@@ -5,7 +5,7 @@ import {
     ERROR_ALREADY_EXISTS,
     ERROR_ALREADY_SING_IN,
     ERROR_CREATE,
-    ERROR_DB_CREATE,
+    ERROR_DB_CREATE, ERROR_DB_UPDATE,
     ERROR_GENERAL_INVALID_SHOULD_STATE,
     ERROR_GENERAL_PARSE_DATA,
     ERROR_INVALID_PARAM,
@@ -21,6 +21,7 @@ import {PASSWORD_SALT_ROUNDS} from "../data/Configs";
 import PKD_Place_Create from "../data/model/packet/PacketData/PKD_Place_Create";
 import LoginUserPassModule from "./login/LoginUserPassModule";
 import {LoginPlatformType} from "../data/enum/LoginPlatformType";
+import mongo from "mongodb";
 
 export default class UserModule {
     constructor() {
@@ -113,9 +114,20 @@ export default class UserModule {
                 if (this.userProfile) {
                     if (packet.type === PK_TYPES_SEND.SING_OUT) {
                         this.onSignOut(packet);
+                    } else if (packet.type === PK_TYPES_SEND.UPDATE_MUTABLE_DATA) {
+                        this.onUpdateMutableData(packet);
                     } else if (packet.type === PK_TYPES_SEND.PLACE_CREATE) {
+                        Global.instance().placeManager.onCreatePlace(packet, this);
                     } else if (packet.type === PK_TYPES_SEND.PLACE_GET) {
-                    } else {
+                        Global.instance().placeManager.onGetPlace(packet, this);
+                    } else if (packet.type === PK_TYPES_SEND.PLACE_GET_MY) {
+                        Global.instance().placeManager.onGetMyPlace(packet, this);
+                    } else if (packet.type === PK_TYPES_SEND.PLACE_JOIN) {
+                        Global.instance().placeManager.onJoinPlace(packet, this);
+                    } else if (packet.type === PK_TYPES_SEND.PLACE_LEAVE) {
+                        Global.instance().placeManager.onLeavePlace(packet, this);
+                    }
+                    else {
                         this.sendPacketToUser(new Packet().createResponse(packet).setError(ERROR_UNKNOWN("Packet type")).toString());
                     }
                 } else {
@@ -135,9 +147,9 @@ export default class UserModule {
         // this.socket.sendUTF(packetData);
         // this.socket.sendBytes(this.stringToArrayBuffer(JSON.stringify(packetData)));
         let data = packetData;
-        let buff = new Buffer(data);
+        let buff = Buffer.from(data);
         let base64data = buff.toString('base64');
-        this.socket.sendBytes(Buffer.from(new Buffer(base64data,'utf8')));
+        this.socket.sendBytes(Buffer.from(base64data, 'utf8'));
 
         // this.socket.sendFrame()
     }
@@ -194,6 +206,34 @@ export default class UserModule {
         this.sendPacketToUser(new Packet().createResponse(packet).setType(PK_TYPES_SEND.SING_OUT).setData({result: true}).toString());
     }
 
+    onUpdateMutableData(packet) {
+        const self = this;
+
+        this.userProfile.mutableData = packet.data;
+        this.userProfile.privateData = {test: 123};
+        const o_id = new mongo.ObjectID(this.userProfile._id);
+        const docObj = {
+            $set: {
+                mutableData: this.userProfile.mutableData,
+            },
+        };
+        Global.instance().dbManager.updateDocument(
+            "user",
+            {'_id': o_id},
+            docObj,null,
+            function (res) {
+                self.sendPacketToUser(new Packet().createResponse(packet).setData({
+                    result: res.result,
+                    mutableData: self.userProfile.mutableData
+                }).toString());
+            }, function (error) {
+                console.error("[PlayerController] - [onUpdateMutableData] - error on update mutableData, error: ", error);
+                self.sendPacketToUser(new Packet().createResponse(packet).setError(
+                    ERROR_DB_UPDATE("user.mutableData")).toString());
+            })
+
+    }
+
     createCurrentLoginPlatform(loginPlatformType) {
         if (loginPlatformType === LoginPlatformType.USER_PASS) {
             return new LoginUserPassModule(this);
@@ -214,5 +254,72 @@ export default class UserModule {
         return bytes;
     }
 
+    onJoinPlace(packet){
+        const self = this;
+
+          if(packet.data == null || packet.data.placeId == null){
+              self.sendPacketToUser(new Packet().createResponse(packet).setError(
+                  ERROR_REQUIRED_FIELD("placeId")).toString());
+              return;
+          }
+
+        const o_id = new mongo.ObjectID(this.userProfile._id);
+        const docObj = {$set: { placeId: packet.data.placeId ,userId: this.userProfile._id} };
+        Global.instance().dbManager.updateDocument(
+            "link-user-place",
+            {placeId: packet.data.placeId ,userId: this.userProfile._id },
+            docObj,null,
+            {upsert:true},
+            function (res) {
+                self.sendPacketToUser(new Packet().createResponse(packet).setData({
+                    result: res.result,
+                }).toString());
+            }, function (error) {
+                console.error("[PlayerController] - [onJoinPlace] - error on update placeIdList, error: ", error);
+                self.sendPacketToUser(new Packet().createResponse(packet).setError(
+                    ERROR_DB_UPDATE("user.placeIdList")).toString());
+            })
+    }
+    onLeavePlace(packet){
+        const self = this;
+        let foundedPlaceIdIndex = -1;
+
+        if(this.userProfile.placeIdList == null){
+            self.sendPacketToUser(new Packet().createResponse(packet).setError(
+                ERROR_NOT_FOUND("placeIdList is empty")).toString());
+            return;
+        }
+        else{
+            foundedPlaceIdIndex = this.userProfile.placeIdList.findIndex(x => x === packet.data.placeId);
+            if(foundedPlaceIdIndex === -1){
+                self.sendPacketToUser(new Packet().createResponse(packet).setError(
+                    ERROR_NOT_FOUND("placeId not in user")).toString());
+                return;
+            }
+
+        }
+
+        const o_id = new mongo.ObjectID(this.userProfile._id);
+        const docObj = {$pull: { placeIdList: packet.data.placeId } };
+        Global.instance().dbManager.updateDocument(
+            "user",
+            {'_id': o_id},
+            docObj,null,
+            function (res) {
+                self.userProfile.placeIdList.splice(foundedPlaceIdIndex , 1);
+                self.sendPacketToUser(new Packet().createResponse(packet).setData({
+                    result: res.result,
+                    placeIdList: self.userProfile.placeIdList
+                }).toString());
+
+                Global.instance().placeManager.onLeavePlace(packet, this);
+
+
+            }, function (error) {
+                console.error("[PlayerController] - [onLeavePlace] - error on update placeIdList, error: ", error);
+                self.sendPacketToUser(new Packet().createResponse(packet).setError(
+                    ERROR_DB_UPDATE("user.placeIdList")).toString());
+            })
+    }
 };
 

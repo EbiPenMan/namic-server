@@ -1,5 +1,4 @@
-//region --- Packet ---
-
+//region --- GENERAL ---
 
 export const ERROR_GENERAL_PARSE_DATA = function (name) {
     if (name)
@@ -63,6 +62,38 @@ export const ERROR_PACKET_UNDEFINED = function (name) {
 };
 
 //endregion
+
+//region --- DB ---
+
+export const ERROR_DB_CREATE = function (name) {
+    if (name)
+        return {
+            code: 103001,
+            codeStr: ERROR_DB_CREATE.name,
+            message: `DB create ${name}.`
+        };
+    return {
+        code: 103001,
+        codeStr: ERROR_DB_CREATE.name,
+        message: "DB create."
+    };
+};
+export const ERROR_DB_UPDATE = function (name) {
+    if (name)
+        return {
+            code: 103002,
+            codeStr: ERROR_DB_UPDATE.name,
+            message: `DB update ${name}.`
+        };
+    return {
+        code: 103002,
+        codeStr: ERROR_DB_UPDATE.name,
+        message: "DB update."
+    };
+};
+
+//endregion
+
 
 export const ERROR_NOT_FOUND = function (name) {
     if (name)
@@ -131,20 +162,6 @@ export const ERROR_CREATE = function (name) {
         code: 605,
         codeStr: ERROR_CREATE.name,
         message: "Create."
-    };
-};
-
-export const ERROR_DB_CREATE = function (name) {
-    if (name)
-        return {
-            code: 606,
-            codeStr: ERROR_DB_CREATE.name,
-            message: `DB create ${name}.`
-        };
-    return {
-        code: 606,
-        codeStr: ERROR_DB_CREATE.name,
-        message: "DB create."
     };
 };
 

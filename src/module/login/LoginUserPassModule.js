@@ -53,19 +53,19 @@ export default class LoginUserPassModule {
                                 },
                                 function (error) {
                                     self.userC.sendPacketToUser(new Packet().createResponse(packet).setType(PK_TYPES_SEND.SING_IN).setError(ERROR_NOT_FOUND("user by loginPlatform")).toString());
-                                    reject("ERROR_NOT_FOUND=user");
+                                    reject("ERROR_NOT_FOUND=user on user");
                                 }
                             );
 
                         } else {
                             self.userC.sendPacketToUser(new Packet().createResponse(packet).setType(PK_TYPES_SEND.SING_IN).setError(ERROR_INVALID_PARAM("password")).toString());
-                            reject("ERROR_INVALID_PARAM=password");
+                            reject("ERROR_INVALID_PARAM=password on user");
                         }
                     });
                 },
                 function (error) {
                     self.userC.sendPacketToUser(new Packet().createResponse(packet).setType(PK_TYPES_SEND.SING_IN).setError(ERROR_NOT_FOUND("userName")).toString());
-                    reject("ERROR_NOT_FOUND=userName");
+                    reject("ERROR_NOT_FOUND=userName on login-platform");
                 }
             );
             //     .catch(function () {
@@ -99,6 +99,7 @@ export default class LoginUserPassModule {
             .catch(function (error) {
                     bcrypt.hash(packet.data.loginPlatformData.password, PASSWORD_SALT_ROUNDS, function (err, hash) {
                         if (hash) {
+                            let displayNamePostfix = "_" + Date.now();
                             Global.instance().dbManager.insertDocumentOne(
                                 "login-platform",
                                 {
@@ -109,10 +110,10 @@ export default class LoginUserPassModule {
                                         userName: packet.data.loginPlatformData.userName,
                                         password: hash
                                     },
-                                    displayName: packet.data.loginPlatformData.userName + "_" + Date.now(),
+                                    displayName: packet.data.loginPlatformData.userName + displayNamePostfix,
                                     names: {
                                         familyName: "",
-                                        givenName: "",
+                                        givenName: packet.data.loginPlatformData.userName + displayNamePostfix,
                                         middleName: ""
                                     },
                                     emails: [], // str
@@ -122,12 +123,12 @@ export default class LoginUserPassModule {
                                 })
                                 .then(function (res) {
 
-                                    Global.instance().dbManager.foundDocument("defaultUserData", {},
+                                    Global.instance().dbManager.foundDocument("defaultUserData", {userType: packet.data.loginPlatformData.userType},
                                         function (resDef) {
                                             let userData = resDef[0];
                                             delete userData._id;
-                                            userData.name = res.ops[0].displayName;
-                                            userData.photo = res.ops[0].photos[0];
+                                            userData.publicData.name = res.ops[0].displayName;
+                                            userData.publicData.photoUrl = res.ops[0].photos[0];
                                             userData.loginPlatforms = [{
                                                 loginPlatformId: res.insertedId.toString(),
                                                 loginPlatformType: res.ops[0].loginPlatformType,

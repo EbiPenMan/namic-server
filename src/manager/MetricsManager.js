@@ -19,7 +19,7 @@ export default class MetricsManager {
                         self.registered_callbacks[i].paramsArray
                     );
                 }
-            }, 1000)
+            }, 10000)
     }
 
     stopScheduler() {

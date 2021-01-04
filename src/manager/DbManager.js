@@ -1,9 +1,10 @@
 import mongo from "mongodb";
+import {DB_NAME, DB_URL} from "../data/Configs";
 
 export default class DbManager {
     constructor() {
-        this.db_url = "mongodb://localhost:27017/";
-        this.db_name = "nomic-server";
+        this.db_url = DB_URL;
+        this.db_name = DB_NAME;
         this.connectedDb = null;
 
     }
@@ -164,7 +165,7 @@ export default class DbManager {
         });
     }
 
-    updateDocument(collectionName, docFields, docObj, onDone, OnError) {
+    updateDocument(collectionName, docFields, docObj, options = null, onDone = null, OnError = null) {
 
         const self = this;
 
@@ -173,7 +174,7 @@ export default class DbManager {
 
             self.createOrConnectToDb()
                 .then(function (db) {
-                    db.collection(collectionName).update(docFields, docObj, function (errC, resC) {
+                    db.collection(collectionName).update(docFields, docObj, options, function (errC, resC) {
                         if (errC) {
                             console.log("[DbManager] - [updateDocument] - error on update doc, error: ", errC);
                             if (OnError)
